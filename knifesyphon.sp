@@ -26,7 +26,7 @@ public Plugin:myinfo = {
     author = "bl4nk",
     description = "Gives players a health boost when they make a knife kill.",
     version = PLUGIN_VERSION,
-    url = "http://forums.alliedmods.net"
+    url = "http://forums.joe.to/"
 };
 
 public OnPluginStart() {
