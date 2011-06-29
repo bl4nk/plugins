@@ -60,7 +60,8 @@ new String:brokenline[IRC_MAXLEN];
 
 new String:g_TriggerChannel[IRC_CHANNEL_MAXLEN];
 
-new Handle:casera;
+new Handle:g_hConVarDebug;
+new Handle:h_hConVarPath;
 
 public Plugin:myinfo = {
     name = "SourceIRC",
@@ -74,6 +75,9 @@ public OnPluginStart() {
     RegPluginLibrary("sourceirc");
 
     CreateConVar("sourceirc_version", IRC_VERSION, "Current version of SourceIRC", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_SPONLY|FCVAR_NOTIFY);
+    g_hConVarDebug = CreateConVar("irc_debug", "0", "Print debug information to the server console", FCVAR_PLUGIN);
+    h_hConVarPath = CreateConVar("irc_configpath", "configs/sourceirc.cfg", "Path to the config file to use", FCVAR_PLUGIN);
+    
     LoadTranslations("sourceirc.phrases");
     
     CommandPlugins = CreateArray();
@@ -93,8 +97,6 @@ public OnPluginStart() {
 
     g_connected = false;
     RegAdminCmd("irc_send", Command_Send, ADMFLAG_RCON, "irc_send <message>");
-    
-    casera = CreateConVar("irc_debug", "0");
 }
 
 public OnAllPluginsLoaded() {
@@ -158,8 +160,9 @@ public OnConfigsExecuted() {
 
 LoadConfigs() {
     kv = CreateKeyValues("SourceIRC");
-    decl String:file[512];
-    BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
+    decl String:path[128], String:file[512];
+    GetConVarString(h_hConVarPath, path, sizeof(path));
+    BuildPath(Path_SM, file, sizeof(file), path);
     FileToKeyValues(kv, file);
     KvJumpToKey(kv, "Settings");
     messagerate = KvGetFloat(kv, "msg-rate", 2.0);
@@ -759,7 +762,7 @@ public N_IRC_IsAdminChan(Handle:plugin, numParams) {
 }
 
 Debug_Log(const String:szText[], any:...) {
-    if (GetConVarBool(casera)) {
+    if (GetConVarBool(g_hConVarDebug)) {
         decl String:szOutput[1024];
         VFormat(szOutput, sizeof(szOutput), szText, 2);
         
