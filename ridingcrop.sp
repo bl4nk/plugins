@@ -24,7 +24,7 @@ public OnClientPutInServer(iClient) {
 }
 
 public Action:OnTakeDamage(iVictim, &iAttacker, &iInflictor, &Float:fDamage, &iDamageType, &iWeapon, Float:fDamageForce[3], Float:fDamagePosition[3]) {
-    if (iAttacker && GetClientTeam(iVictim) == GetClientTeam(iAttacker) && iWeapon > MaxClients && GetItemIndex(iWeapon) == 447) {
+    if (iAttacker && iVictim && iAttacker <= MaxClients && iVictim <= MaxClients && GetClientTeam(iVictim) == GetClientTeam(iAttacker) && iWeapon > MaxClients && GetItemIndex(iWeapon) == 447) {
         return Plugin_Handled;
     }
     
