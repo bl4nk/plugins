@@ -61,7 +61,10 @@ public OnClientPutInServer(iClient) {
 }
 
 public Action:OnTakeDamage(iVictim, &iAttacker, &iInflictor, &Float:fDamage, &iDamageType, &iWeapon, Float:fDamageForce[3], Float:fDamagePosition[3]) {
-    g_iWeaponId[iAttacker][iVictim] = iWeapon;
+    if (iAttacker && iVictim && iAttacker <= MaxClients && iVictim <= MaxClients) {
+        g_iWeaponId[iAttacker][iVictim] = iWeapon;
+    }
+    
     return Plugin_Continue;
 }
 
