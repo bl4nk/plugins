@@ -76,7 +76,7 @@ public Event_PlayerDeath(Handle:hEvent, const String:szEventName[], bool:bDontBr
     new iVictim = GetClientOfUserId(GetEventInt(hEvent, "userid"));
     new iAttacker = GetClientOfUserId(GetEventInt(hEvent, "attacker"));
     
-    if (iVictim && !iAttacker && GetClientTeam(iVictim) == GetClientTeam(iAttacker)) {    
+    if (iVictim && iAttacker && !iAttacker && GetClientTeam(iVictim) == GetClientTeam(iAttacker)) {    
         new iWeapon = g_iWeaponId[iAttacker][iVictim];
         new iMelee = GetPlayerWeaponSlot(iAttacker, WEAPONSLOT_MELEE);
         
