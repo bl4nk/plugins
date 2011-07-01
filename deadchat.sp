@@ -39,15 +39,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 
 public Action:Command_Say(client, const String:command[], args)
 {
-    new bool:alltalk = GetConVarBool(g_hAllTalk);
-
-    if (!alltalk)
-        return Plugin_Continue;
-
-    if (!client || IsPlayerAlive(client))
-        return Plugin_Continue;
-
-    if (RoundEnd)
+    if (!GetConVarBool(g_hAllTalk) || !client || RoundEnd || !IsClientConnected(client) || !IsClientInGame(client) || IsPlayerAlive(client))
         return Plugin_Continue;
 
     decl String:text[192];
