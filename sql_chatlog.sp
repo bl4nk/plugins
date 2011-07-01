@@ -64,7 +64,7 @@ public Action:Command_Say(client, const String:command[], args)
         strcopy(authid, sizeof(authid), "STEAMID_CONSOLE");
         strcopy(name, sizeof(name), "CONSOLE");
     }
-    else
+    else if (IsClientConnected(client) && IsClientAuthorized(client))
     {
         GetClientAuthString(client, authid, sizeof(authid));
         GetClientName(client, nameBuffer, sizeof(nameBuffer));
