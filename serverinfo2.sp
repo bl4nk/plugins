@@ -22,15 +22,15 @@ public Plugin:myinfo = {
 public OnPluginStart() {
     g_hConvarID = CreateConVar("sm_serverinfo_id", "0", "Position of the server on the list (starts at 1, 0 = disabled)", FCVAR_PLUGIN, true, 0.0, false, _);
     g_hConvarName = CreateConVar("sm_serverinfo_name", "Rename Me!", "Name of the server on the list", FCVAR_PLUGIN);
-    
+
     RegConsoleCmd("sm_servers", Command_Servers, "sm_servers - Brings up the joe.to server list");
-    
+
     new iServerIP[4];
     Steam_GetPublicIP(iServerIP);
     Format(g_szServerIP, sizeof(g_szServerIP), "%i.%i.%i.%i:%i", iServerIP[0], iServerIP[1], iServerIP[2], iServerIP[3], GetConVarInt(FindConVar("hostport")));
-    
+
     HookConVarChange(g_hConvarName, OnConVarChanged);
-    
+
     SQL_TConnect(SQL_Connected);
 }
 
@@ -64,13 +64,13 @@ public Action:Command_Servers(iClient, iArgs) {
 public SQL_Connected(Handle:hOwner, Handle:hDatabase, const String:szError[], any:data) {
     if (hDatabase == INVALID_HANDLE) {
         SetFailState("Database failure: %s", szError);
-    } 
-    
+    }
+
     g_hDatabase = hDatabase;
 
     SQL_CreateTables();
     SQL_SendQuery("SET NAMES 'utf8'");
-    
+
     UpdateServerData();
     CreateTimer(30.0, Timer_UpdateServerData, _, TIMER_REPEAT);
 }
@@ -96,12 +96,12 @@ public SQL_QuerySent(Handle:hOwner, Handle:hQuery, const String:szError[], any:h
 stock SQL_SendQuery(const String:szText[]) {
     new Handle:hData = CreateDataPack();
     WritePackString(hData, szText);
-    
+
     SQL_TQuery(g_hDatabase, SQL_QuerySent, szText, hData);
 }
 
 SQL_CreateTables() {
-    static const String:szQuery[] = 
+    static const String:szQuery[] =
         "CREATE TABLE IF NOT EXISTS `serverinfo` ( \
           `id` TINYINT NOT NULL default 0, \
           `name` VARCHAR(32) NOT NULL, \
@@ -116,13 +116,12 @@ SQL_CreateTables() {
     SQL_SendQuery(szQuery);
 }
 
-/* To do: Add "ON DUPLICATE KEY UPDATE..." to the query */
 UpdateServerData() {
     new iServerID = GetConVarInt(g_hConvarID);
     if (iServerID > 0) {
-        decl String:szQuery[64];
-        Format(szQuery, sizeof(szQuery), "INSERT IGNORE INTO `serverinfo` (id, name, map, clients, maxclients, ip, lastupdate) VALUES (%i, '%s', '%s', %i, %i, '%s', %i)", iServerID, g_szServerName, g_szMapName, GetClientCount(false), MaxClients, g_szServerIP, GetTime());
-        
+        decl String:szQuery[448];
+        Format(szQuery, sizeof(szQuery), "INSERT INTO `serverinfo` (id, name, map, clients, maxclients, ip, lastupdate) VALUES (%i, '%s', '%s', %i, %i, '%s', %i) ON DUPLICATE KEY UPDATE name = VALUES(name), map = VALUES(map), clients = VALUES(clients), maxclients = VALUES(maxclients), ip = VALUES(ip), lastupdate = VALUES(lastupdate)", iServerID, g_szServerName, g_szMapName, GetClientCount(false), MaxClients, g_szServerIP, GetTime());
+
         SQL_SendQuery(szQuery);
     }
 }
