@@ -1,15 +1,17 @@
 #pragma semicolon 1
 
 #include <sourcemod>
-#include <steamtools>
+
+new g_iServerID;
 
 new Handle:g_hConvarID;
+new Handle:g_hConvarIP;
 new Handle:g_hConvarName;
 new Handle:g_hDatabase;
 
 new String:g_szMapName[32];
-new String:g_szServerName[32];
 new String:g_szServerIP[24];
+new String:g_szServerName[32];
 new String:g_szClientChoiceIP[MAXPLAYERS+1][24];
 
 public Plugin:myinfo = {
@@ -21,15 +23,14 @@ public Plugin:myinfo = {
 };
 
 public OnPluginStart() {
-    g_hConvarID = CreateConVar("sm_serverinfo_id", "0", "Position of the server on the list (starts at 1, 0 = disabled)", FCVAR_PLUGIN, true, 0.0, false, _);
-    g_hConvarName = CreateConVar("sm_serverinfo_name", "Rename Me!", "Name of the server on the list", FCVAR_PLUGIN);
-
     RegConsoleCmd("sm_servers", Command_Servers, "sm_servers - Brings up the joe.to server list");
 
-    new iServerIP[4];
-    Steam_GetPublicIP(iServerIP);
-    Format(g_szServerIP, sizeof(g_szServerIP), "%i.%i.%i.%i:%i", iServerIP[0], iServerIP[1], iServerIP[2], iServerIP[3], GetConVarInt(FindConVar("hostport")));
+    g_hConvarID = CreateConVar("sm_serverinfo_id", "0", "Position of the server on the list (starts at 1, 0 = disabled)", FCVAR_PLUGIN, true, 0.0, false, _);
+    g_hConvarIP = CreateConVar("sm_serverinfo_ip", "0.0.0.0:27015", "IP Address of the server", FCVAR_PLUGIN);
+    g_hConvarName = CreateConVar("sm_serverinfo_name", "Rename Me!", "Name of the server on the list", FCVAR_PLUGIN);
 
+    HookConVarChange(g_hConvarID, OnConVarChanged);
+    HookConVarChange(g_hConvarIP, OnConVarChanged);
     HookConVarChange(g_hConvarName, OnConVarChanged);
 
     SQL_TConnect(SQL_Connected);
@@ -50,11 +51,21 @@ public OnClientDisconnect(iClient) {
 }
 
 public OnConfigsExecuted() {
+    g_iServerID = GetConVarInt(g_hConvarID);
+
     GetConVarString(g_hConvarName, g_szServerName, sizeof(g_szServerName));
 }
 
 public OnConVarChanged(Handle:hConvar, const String:szOldValue[], const String:szNewValue[]) {
-    strcopy(g_szServerName, sizeof(g_szServerName), szNewValue);
+    if (hConvar == g_hConvarID) {
+        g_iServerID = StringToInt(szNewValue);
+    } else if (hConvar == g_hConvarIP) {
+        strcopy(g_szServerIP, sizeof(g_szServerIP), szNewValue);
+    } else if (hConvar == g_hConvarName) {
+        strcopy(g_szServerName, sizeof(g_szServerName), szNewValue);
+    }
+
+    UpdateServerData();
 }
 
 public Action:Command_Servers(iClient, iArgs) {
@@ -102,10 +113,13 @@ SQL_CreateTables() {
 }
 
 UpdateServerData() {
-    new iServerID = GetConVarInt(g_hConvarID);
-    if (iServerID > 0) {
+    if (!g_hDatabase) {
+        return;
+    }
+
+    if (g_iServerID > 0) {
         decl String:szQuery[448];
-        Format(szQuery, sizeof(szQuery), "INSERT INTO `serverinfo` (id, name, map, clients, maxclients, ip, lastupdate) VALUES (%i, '%s', '%s', %i, %i, '%s', %i) ON DUPLICATE KEY UPDATE name = VALUES(name), map = VALUES(map), clients = VALUES(clients), maxclients = VALUES(maxclients), ip = VALUES(ip), lastupdate = VALUES(lastupdate)", iServerID, g_szServerName, g_szMapName, GetClientCount(false), MaxClients, g_szServerIP, GetTime());
+        Format(szQuery, sizeof(szQuery), "INSERT INTO `serverinfo` (id, name, map, clients, maxclients, ip, lastupdate) VALUES (%i, '%s', '%s', %i, %i, '%s', %i) ON DUPLICATE KEY UPDATE name = VALUES(name), map = VALUES(map), clients = VALUES(clients), maxclients = VALUES(maxclients), ip = VALUES(ip), lastupdate = VALUES(lastupdate)", g_iServerID, g_szServerName, g_szMapName, GetClientCount(false), MaxClients, g_szServerIP, GetTime());
 
         SQL_SendQuery(szQuery);
     }
@@ -132,7 +146,7 @@ public SQL_DisplayMainMenu(Handle:hOwner, Handle:hHndl, const String:szError[], 
 
         Format(szText, sizeof(szText), "%s (%i/%i)", szServerName, SQL_FetchInt(hHndl, 2), SQL_FetchInt(hHndl, 3));
 
-        if (SQL_FetchInt(hHndl, 0) == GetConVarInt(g_hConvarID) || (GetTime() - SQL_FetchInt(hHndl, 4)) >= 300) {
+        if (SQL_FetchInt(hHndl, 0) == g_iServerID || (GetTime() - SQL_FetchInt(hHndl, 4)) >= 300) {
             DrawPanelItem(hPanel, szText, ITEMDRAW_DISABLED);
         } else {
             DrawPanelItem(hPanel, szText);
@@ -159,7 +173,7 @@ public MainMenuHandler(Handle:hMenu, MenuAction:iAction, iClient, iChoice) {
 }
 
 DisplaySubMenu(iClient, iChoice) {
-    decl String:szQuery[48];
+    decl String:szQuery[92];
     Format(szQuery, sizeof(szQuery), "SELECT id, clients, maxclients, name, map, ip FROM serverinfo WHERE id = %i", iChoice);
 
     SQL_TQuery(g_hDatabase, SQL_DisplaySubMenu, szQuery, GetClientUserId(iClient));
