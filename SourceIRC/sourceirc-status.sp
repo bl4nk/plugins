@@ -24,6 +24,7 @@
 new g_TotalRounds;
 
 new Handle:g_Cvar_MaxRounds = INVALID_HANDLE;
+new Handle:g_Cvar_Replay = INVALID_HANDLE;
 
 public Plugin:myinfo = {
     name = "SourceIRC -> Status",
@@ -39,6 +40,7 @@ public OnPluginStart() {
     HookEventEx("arena_win_panel", Event_TeamPlayWinPanel);
     
     g_Cvar_MaxRounds = FindConVar("mp_maxrounds");
+    g_Cvar_Replay = FindConVar("replay_enable");
 }
 
 public OnAllPluginsLoaded() {
@@ -78,7 +80,7 @@ public Action:Command_GameInfo(const String:nick[], args) {
     FormatTimeLeft(timeleft, sizeof(timeleft));
     
     new iClients = GetClientCount(true);
-    if (GetConVarBool(FindConVar("replay_enable"))) {
+    if (g_Cvar_Replay != INVALID_HANDLE && GetConVarBool(g_Cvar_Replay)) {
         iClients--;
     }
     
@@ -98,7 +100,7 @@ public Action:Command_Players(const String:nick[], args) {
     IRC_GetMsgChan(channel, sizeof(channel));
     
     new iClients = GetClientCount(true);
-    if (GetConVarBool(FindConVar("replay_enable"))) {
+    if (g_Cvar_Replay != INVALID_HANDLE && GetConVarBool(g_Cvar_Replay)) {
         iClients--;
     }
     
