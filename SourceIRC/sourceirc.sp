@@ -63,6 +63,9 @@ new String:g_TriggerChannel[IRC_CHANNEL_MAXLEN];
 new Handle:g_hConVarDebug;
 new Handle:h_hConVarPath;
 
+// Used to bind the socket to the proper IP address
+new String:g_szServerIP[32];
+
 public Plugin:myinfo = {
     name = "SourceIRC",
     author = "Azelphur",
@@ -79,6 +82,18 @@ public OnPluginStart() {
     h_hConVarPath = CreateConVar("irc_configpath", "configs/sourceirc.cfg", "Path to the config file to use", FCVAR_PLUGIN);
     
     LoadTranslations("sourceirc.phrases");
+    
+    new pieces[4];
+    new longip = GetConVarInt(FindConVar("hostip"));
+    
+    pieces[0] = (longip >> 24) & 0x000000FF;
+    pieces[1] = (longip >> 16) & 0x000000FF;
+    pieces[2] = (longip >> 8) & 0x000000FF;
+    pieces[3] = longip & 0x000000FF;
+    
+    Format(g_szServerIP, sizeof(g_szServerIP), "%i.%i.%i.%i", pieces[0], pieces[1], pieces[2], pieces[3]);
+    
+    Debug_Log("Server IP: %s", g_szServerIP);
     
     CommandPlugins = CreateArray();
     Commands = CreateArray(IRC_CMD_MAXLEN);
@@ -177,26 +192,29 @@ Connect() {
         SetFailState("No server defined in sourceirc.cfg");
     new port = KvGetNum(kv, "port", 6667);
     KvRewind(kv);
+    
+    Debug_Log("Connecting to IRC server");
+    
     gsocket = SocketCreate(SOCKET_TCP, OnSocketError);
+    SocketBind(gsocket, g_szServerIP, GetRandomInt(1, 25534));
     SocketConnect(gsocket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, server, port);
 }
 
 public OnSocketConnected(Handle:socket, any:arg) {
-    decl String:hostname[256], String:realname[64], String:ServerIp[16];
+    Debug_Log("Connected to IRC server");
+    
     KvJumpToKey(kv, "Server");
+    
+    decl String:hostname[256], String:realname[64];
     KvGetString(kv, "nickname", g_nick, sizeof(g_nick), "SourceIRC");
     KvGetString(kv, "realname", realname, sizeof(realname), "SourceIRC - http://Azelphur.com/project/sourceirc");
+    
     KvRewind(kv);
     
     SocketGetHostName(hostname, sizeof(hostname));
-
-    new iIp = GetConVarInt(FindConVar("hostip"));
-    Format(ServerIp, sizeof(ServerIp), "%i.%i.%i.%i", (iIp >> 24) & 0x000000FF,
-                                                          (iIp >> 16) & 0x000000FF,
-                                                          (iIp >>  8) & 0x000000FF,
-                                                          iIp         & 0x000000FF);
+    
     IRC_Send("NICK %s", g_nick);
-    IRC_Send("USER %s %s %s :%s", g_nick, hostname, ServerIp, realname);
+    IRC_Send("USER %s %s %s :%s", g_nick, hostname, g_szServerIP, realname);
 }
 
 public OnSocketReceive(Handle:socket, String:receiveData[], const dataSize, any:hFile) {
@@ -460,6 +478,7 @@ public IRC_Connected() {
 
 public OnSocketDisconnected(Handle:socket, any:hFile) {
     g_connected = false;
+    Debug_Log("Disconnected from IRC server, reconnecting in 5.0s");
     CreateTimer(5.0, ReConnect);
     CloseHandle(socket);
 }
