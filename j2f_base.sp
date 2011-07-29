@@ -167,12 +167,6 @@ public OnClientDisconnect(client)
 public OnMapEnd()
 {
 	SaveAllPlayerData();
-
-	if (hDatabase != INVALID_HANDLE)
-	{
-		CloseHandle(hDatabase);
-		hDatabase = INVALID_HANDLE;
-	}
 }
 
 public OnMapStart()
@@ -229,7 +223,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 				PrintToChat(assister, "%sYou gained 3 experience for assisting %N.", j2f, attacker);
 				AddExperience(assister, 3);
 			}
-			else if (GetClientTeam(assister) != GetClientTeam(victim))
+			else if (!assistSameTeam)
 			{
 				// give experience to the assister
 				PrintToChat(assister, "%sYou gained 1 experience for assisting %N.", j2f, attacker);
