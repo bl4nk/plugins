@@ -3,6 +3,7 @@
 #include <sourcemod>
 #include <tagcontrol>
 
+new Handle:g_hConVarTags;
 new Handle:g_hTagArray;
 
 public Plugin:myinfo = {
@@ -19,6 +20,9 @@ public OnPluginStart() {
     RegAdminCmd("sm_tagcontrol_list", Command_List, ADMFLAG_RCON, "sm_tagcontrol_list - Lists all Tags that are being blocked");
 
     g_hTagArray = CreateArray(32);
+
+    g_hConVarTags = FindConVar("sv_tags");
+    RemoveConVarFlags(g_hConVarTags, FCVAR_NOTIFY);
 }
 
 public Action:Command_Add(iClient, iArgCount) {
@@ -38,6 +42,8 @@ public Action:Command_Add(iClient, iArgCount) {
     PushArrayString(g_hTagArray, szTag);
     ReplyToCommand(iClient, "[SM] Now blocking Tag \"%s\"", szTag);
 
+    SetConVarString(g_hConVarTags, "");
+
     return Plugin_Handled;
 }
 
@@ -55,6 +61,9 @@ public Action:Command_Remove(iClient, iArgCount) {
         RemoveFromArray(g_hTagArray, iIndex);
 
         ReplyToCommand(iClient, "[SM] The Tag \"%s\" is no longer being blocked", szTag);
+
+        SetConVarString(g_hConVarTags, "");
+
         return Plugin_Handled;
     }
 
@@ -89,4 +98,10 @@ public Action:OnAddTag(const String:szTag[]) {
     }
 
     return Plugin_Continue;
+}
+
+stock RemoveConVarFlags(Handle:hConVar, iFlags) {
+    new iNewFlags = GetConVarFlags(hConVar);
+    iNewFlags &= ~iFlags;
+    SetConVarFlags(hConVar, iNewFlags);
 }
