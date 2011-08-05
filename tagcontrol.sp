@@ -79,10 +79,16 @@ public Action:Command_List(iClient, iArgCount) {
         return Plugin_Handled;
     }
 
-    new String:szTags[192];
+    new String:szTags[192], bool:bFirst = true;
     for (new i = 0; i < iSize; i++) {
         decl String:szBuffer[32];
         GetArrayString(g_hTagArray, i, szBuffer, sizeof(szBuffer));
+
+        if (bFirst) {
+            bFirst = false;
+        } else {
+            StrCat(szTags, sizeof(szTags), ", ");
+        }
 
         StrCat(szTags, sizeof(szTags), szBuffer);
     }
