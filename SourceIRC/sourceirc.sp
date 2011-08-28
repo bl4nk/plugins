@@ -423,7 +423,7 @@ RunCommand(const String:hostmask[], const String:message[]) {
     IRC_GetNickFromHostMask(hostmask, nick, sizeof(nick));
     
     new arraysize = GetArraySize(Commands);
-    new bool:IsPlugin_Handled = false;
+//  new bool:IsPlugin_Handled = false;
     for (new i = 0; i < arraysize; i++) {
         GetArrayString(Commands, i, savedcommand, sizeof(savedcommand));
         if (StrEqual(command, savedcommand, false)) {
@@ -442,8 +442,8 @@ RunCommand(const String:hostmask[], const String:message[]) {
                 Call_Finish(_:result);
                 CloseHandle(f);
                 ClearArray(cmdargs);
-                if (result == Plugin_Handled)
-                    IsPlugin_Handled = true;
+//              if (result == Plugin_Handled)
+//                  IsPlugin_Handled = true;
                 if (result == Plugin_Stop)
                     return;	
             } else {
@@ -452,8 +452,8 @@ RunCommand(const String:hostmask[], const String:message[]) {
             }
         }
     }
-    if (!IsPlugin_Handled) 
-        IRC_ReplyToCommand(nick, "%t", "Unknown Command", command);
+ // if (!IsPlugin_Handled)
+ //     IRC_ReplyToCommand(nick, "%t", "Unknown Command", command);
 }
 
 public IRC_Connected() {
