@@ -222,7 +222,12 @@ public OnSocketReceive(Handle:socket, String:receiveData[], const dataSize, any:
     decl String:line[IRC_MAXLEN];
     decl String:prefix[IRC_MAXLEN];
     decl String:trailing[IRC_MAXLEN];
-    new Handle:args = CreateArray(IRC_MAXLEN);
+    
+    static Handle:args = INVALID_HANDLE;
+    if (args == INVALID_HANDLE) {
+        args = CreateArray(IRC_MAXLEN);
+    }
+    
     while (startpos < dataSize) {
         startpos += SplitString(receiveData[startpos], "\n", line, sizeof(line));
         if (receiveData[startpos-1] != '\n') { // is this the first part of a "Broken" packet?
@@ -338,6 +343,7 @@ HandleLine(String:prefix[], Handle:args) {
         new Handle:connected = CreateGlobalForward("IRC_Connected", ET_Ignore);
         Call_StartForward(connected);
         Call_Finish();
+        CloseHandle(connected);
     }
     for (new i = 0; i < GetArraySize(Events); i++) { // Push events to plugins that have hooked them.
         GetArrayString(Events, i, ev, sizeof(ev));
@@ -350,6 +356,7 @@ HandleLine(String:prefix[], Handle:args) {
             Call_PushString(prefix);
             Call_PushCell(GetArraySize(cmdargs)-1);
             Call_Finish(_:result);
+            CloseHandle(f);
             if (result == Plugin_Stop)
                 return;	
         }
@@ -433,6 +440,7 @@ RunCommand(const String:hostmask[], const String:message[]) {
                 Call_PushString(nick);
                 Call_PushCell(GetArraySize(cmdargs)-1);
                 Call_Finish(_:result);
+                CloseHandle(f);
                 ClearArray(cmdargs);
                 if (result == Plugin_Handled)
                     IsPlugin_Handled = true;
@@ -704,6 +712,7 @@ public N_IRC_GetUserFlagBits(Handle:plugin, numParams) {
     Call_PushString(hostmask);
     Call_PushCellRef(resultflag);
     Call_Finish();
+    CloseHandle(f);
     return _:resultflag;
 }
 
