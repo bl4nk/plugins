@@ -3,9 +3,10 @@
 #include <sourcemod>
 #include <tf2_stocks>
 #include <mystock>
+#include <gamerules>
 
 // Global Definitions
-#define PLUGIN_VERSION "2.0.0"
+#define PLUGIN_VERSION "2.1.0"
 
 enum STKPType
 {
@@ -16,7 +17,6 @@ enum STKPType
 
 new oldFF = -1;
 new preSDFF = -1;
-new g_RoundCounter;
 new g_AttackerTeamkills[MAXPLAYERS + 1];
 new g_AttackerPunished[MAXPLAYERS + 1];
 new g_VictimTeamkilled[MAXPLAYERS + 1];
@@ -84,7 +84,6 @@ public OnMapStart()
     ClearTrie(g_hPlayerInfoTrie);
     ClearTrie(g_hAttackerTrie);
 
-    g_RoundCounter = 0;
     oldFF = -1;
 }
 
@@ -150,26 +149,31 @@ public OnClientDisconnect(client)
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
     /* If it's a "Waiting For Players" round (the first round), disable the plugin */
-    if (!g_RoundCounter++)
+    if (GameRules_GetRoundState() == RoundState_Pregame)
     {
         g_bEnabled = false;
-    }
-    else if (!g_bEnabled)
-    {
+        return;
+    } else {
         g_bEnabled = true;
     }
 
     // Change FF setting back to previous value (if not during WFP)
-    if (oldFF != -1 && oldFF != GetConVarInt(g_hCvarFF))
+    if (oldFF != -1)
     {
-        SetConVarInt(g_hCvarFF, oldFF);
+        if (oldFF != GetConVarInt(g_hCvarFF)) {
+            SetConVarInt(g_hCvarFF, oldFF);
+        }
+
         oldFF = -1;
     }
 
     // Change FF setting back to what it was before Sudden Death
-    if (preSDFF != -1 && preSDFF != GetConVarInt(g_hCvarFF))
+    if (preSDFF != -1)
     {
-        SetConVarInt(g_hCvarFF, preSDFF);
+        if (preSDFF != GetConVarInt(g_hCvarFF)) {
+            SetConVarInt(g_hCvarFF, preSDFF);
+        }
+
         preSDFF = -1;
     }
 }
@@ -243,7 +247,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
         SetTrieString(g_hVictimName, buffer, victimName);
         SetTrieString(g_hAttackerName, buffer, attackerName);
 
-        Format(buffer, sizeof(buffer), "%s teamkilled you\nWas the TK intentional?", attackerName);
+        Format(buffer, sizeof(buffer), "Did %s intentionally teamkill you?", attackerName);
         SetMenuTitle(menu, buffer);
 
         AddMenuItem(menu, "", "No");
@@ -405,94 +409,84 @@ STKP_Handler(STKPType:type, attacker, victim)
     // Loop through all players to display the correct message to them via chat
     for (new i = 1; i <= MaxClients; i++)
     {
-        if (!IsClientInGame(i))
-        {
+        if (!IsClientInGame(i)) {
             continue;
         }
 
-        switch (type)
-        {
-            case STKP_Punish:
-            {
-                if (i == attacker)
-                {
+        if (type == STKP_Punish && CheckAdminFlags(i, ADMFLAG_GENERIC)) {
+            PrintToConsole(i, "[SM] %s has punished %i of %i people.", victimName, g_VictimPunishes[victim], g_VictimTeamkilled[victim]);
+            PrintToConsole(i, "[SM] %s has been punished %i of %i times.", attackerName, g_AttackerPunished[attacker], g_AttackerTeamkills[attacker]);
+        }
+
+
+        if (i == attacker) {
+            switch (type) {
+                case STKP_Punish: {
                     Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 chose to not forgive you. (^5%i^1 TK(s) before ban)", victimName, GetConVarInt(g_hCvarAmount) - g_AttackerPunished[i]);
                     ConvertColors(buffer, sizeof(buffer));
                     PrintToChat(i, buffer);
 
                     if (g_AttackerPunished[i] >= GetConVarInt(g_hCvarSlay) && IsPlayerAlive(i))
                     {
-                         Format(buffer, sizeof(buffer), "^4[SM]^1 You were slayed for TKing (^5%i^1 TK(s) before ban)", GetConVarInt(g_hCvarAmount) - g_AttackerPunished[i]));
+                         Format(buffer, sizeof(buffer), "^4[SM]^1 You were slayed for TKing (^5%i^1 TK(s) before ban)", GetConVarInt(g_hCvarAmount) - g_AttackerPunished[i]);
                          ConvertColors(buffer, sizeof(buffer));
                          PrintToChat(i, buffer);
 
                          ForcePlayerSuicide(i);
                     }
                 }
-                else if (i == victim)
-                {
+                case STKP_Forgive: {
+                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave you for TKing him.", victimName);
+                    ConvertColors(buffer, sizeof(buffer));
+                    PrintToChat(i, buffer);
+                }
+                case STKP_NoAction: {
+                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave you for TKing him.", victimName);
+                    ConvertColors(buffer, sizeof(buffer));
+                    PrintToChat(i, buffer);
+                }
+            }
+        } else if (i == victim) {
+            switch (type) {
+                case STKP_Punish: {
                     Format(buffer, sizeof(buffer), "^4[SM]^1 You chose to not forgive ^3%s^1.", attackerName);
                     ConvertColors(buffer, sizeof(buffer));
                     PrintToChat(i, buffer);
                 }
-                else
-                {
-                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^3 did not forgive ^3%s^1.", victimName, attackerName);
-                    ConvertColors(buffer, sizeof(buffer));
-                    PrintToChat(i, buffer);
-                }
-
-                if (CheckAdminFlags(i, ADMFLAG_GENERIC))
-                {
-                    PrintToConsole(i, "[SM] %s has punished %i of %i people.", victimName, g_VictimPunishes[victim], g_VictimTeamkilled[victim]);
-                    PrintToConsole(i, "[SM] %s has been punished %i of %i times.", attackerName, g_AttackerPunished[attacker], g_AttackerTeamkills[attacker]);
-                }
-
-                CheckClientTK(attacker);
-            }
-            case STKP_Forgive:
-            {
-                if (i == attacker)
-                {
-                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave you for TKing him.", victimName);
-                    ConvertColors(buffer, sizeof(buffer));
-                    PrintToChat(i, buffer);
-                }
-                else if (i == victim)
-                {
+                case STKP_Forgive: {
                     Format(buffer, sizeof(buffer), "^4[SM]^1 You chose to forgive ^3%s^1.", attackerName);
                     ConvertColors(buffer, sizeof(buffer));
                     PrintToChat(i, buffer);
                 }
-                else
-                {
-                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave ^3%s^1.", victimName, attackerName);
-                    ConvertColors(buffer, sizeof(buffer));
-                    PrintToChat(i, buffer);
-                }
-            }
-            case STKP_NoAction:
-            {
-                if (i == attacker)
-                {
-                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave you for TKing him.", victimName);
-                    ConvertColors(buffer, sizeof(buffer));
-                    PrintToChat(i, buffer);
-                }
-                else if (i == victim)
-                {
+                case STKP_NoAction: {
                     Format(buffer, sizeof(buffer), "^4[SM] ^1You did not make a choice. ^3%s^1 was forgiven.", attackerName);
                     ConvertColors(buffer, sizeof(buffer));
                     PrintToChat(i, buffer);
                 }
-                else
-                {
+            }
+        } else {
+            switch (type) {
+                case STKP_Punish: {
+                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^3 did not forgive ^3%s^1.", victimName, attackerName);
+                    ConvertColors(buffer, sizeof(buffer));
+                    PrintToChat(i, buffer);
+                }
+                case STKP_Forgive: {
+                    Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave ^3%s^1.", victimName, attackerName);
+                    ConvertColors(buffer, sizeof(buffer));
+                    PrintToChat(i, buffer);
+                }
+                case STKP_NoAction: {
                     Format(buffer, sizeof(buffer), "^4[SM]^1 ^3%s^1 forgave ^3%s^1.", victimName, attackerName);
                     ConvertColors(buffer, sizeof(buffer));
                     PrintToChat(i, buffer);
                 }
             }
         }
+    }
+
+    if (type == STKP_Punish) {
+        CheckClientTK(attacker);
     }
 }
 
