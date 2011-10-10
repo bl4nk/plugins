@@ -3,7 +3,6 @@
 #include <sourcemod>
 #include <tagcontrol>
 
-new Handle:g_hConVarTags;
 new Handle:g_hTagArray;
 
 public Plugin:myinfo = {
@@ -21,8 +20,7 @@ public OnPluginStart() {
 
     g_hTagArray = CreateArray(32);
 
-    g_hConVarTags = FindConVar("sv_tags");
-    RemoveConVarFlags(g_hConVarTags, FCVAR_NOTIFY);
+    RemoveConVarFlags(FindConVar("sv_tags"), FCVAR_NOTIFY);
 }
 
 public Action:Command_Add(iClient, iArgCount) {
@@ -42,7 +40,7 @@ public Action:Command_Add(iClient, iArgCount) {
     PushArrayString(g_hTagArray, szTag);
     ReplyToCommand(iClient, "[SM] Now blocking Tag \"%s\"", szTag);
 
-    SetConVarString(g_hConVarTags, "");
+    ServerCommand("sv_tags \"\"");
 
     return Plugin_Handled;
 }
@@ -62,7 +60,7 @@ public Action:Command_Remove(iClient, iArgCount) {
 
         ReplyToCommand(iClient, "[SM] The Tag \"%s\" is no longer being blocked", szTag);
 
-        SetConVarString(g_hConVarTags, "");
+        ServerCommand("sv_tags \"\"");
 
         return Plugin_Handled;
     }
@@ -107,7 +105,5 @@ public Action:OnAddTag(const String:szTag[]) {
 }
 
 stock RemoveConVarFlags(Handle:hConVar, iFlags) {
-    new iNewFlags = GetConVarFlags(hConVar);
-    iNewFlags &= ~iFlags;
-    SetConVarFlags(hConVar, iNewFlags);
+    SetConVarFlags(hConVar, GetConVarFlags(hConVar)^iFlags);
 }
