@@ -149,7 +149,7 @@ public OnClientDisconnect(client)
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
     /* If it's a "Waiting For Players" round (the first round), disable the plugin */
-    if (GameRules_GetRoundState() == RoundState_Pregame)
+    if (GameRules_GetProp("m_bInWaitingForPlayers"))
     {
         g_bEnabled = false;
         return;
