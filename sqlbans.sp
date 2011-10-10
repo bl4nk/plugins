@@ -3,7 +3,7 @@
 #include <sourcemod>
 
 // Global Definitions
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.0.1"
 
 new Handle:g_hAuthToIndex = INVALID_HANDLE;
 new Handle:g_hDatabase = INVALID_HANDLE;
@@ -178,7 +178,7 @@ public OnClientAuthorized(iClient, const String:szAuth[]) {
             decl String:szReason[64];
             GetArrayString(g_hIndexToReason, iIndex, szReason, sizeof(szReason));
 
-            KickClient(iClient, "\nYou have been banned!\nBan Reason: %s\nVisit http://forums.joe.to/ to appeal your ban", szReason);
+            KickClient(iClient, "\nYou have been banned!\nBan Reason: %s\nVisit http://www.joe.to/unban/ to appeal your ban", szReason);
         } else {
             decl String:szServerGroup[32];
             GetConVarString(g_hCvarServerGroup, szServerGroup, sizeof(szServerGroup));
