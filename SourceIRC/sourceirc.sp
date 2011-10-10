@@ -683,18 +683,7 @@ public N_IRC_GetAdminFlag(Handle:plugin, numParams) {
     if (flag == 0)
         return true;
     GetNativeString(1, hostmask, sizeof(hostmask));
-    
-    decl String:correctHostmask[512];
-    new loc = FindCharInString(hostmask, '!');
-    
-    if (loc > -1) {
-        loc += 2;
-        strcopy(correctHostmask, sizeof(correctHostmask), hostmask[loc]);
-    } else {
-        strcopy(correctHostmask, sizeof(correctHostmask), hostmask);
-    }
-    
-    new userflag = IRC_GetUserFlagBits(correctHostmask);
+    new userflag = IRC_GetUserFlagBits(hostmask);
     if (userflag & ADMFLAG_ROOT)
         return true;
     if (userflag & flag)
