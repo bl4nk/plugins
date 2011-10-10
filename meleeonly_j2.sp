@@ -10,7 +10,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "2.0.0"
+#define PLUGIN_VERSION "2.1.0"
 
 #define VOTE_NO "##no##"
 #define VOTE_YES "##yes##"
@@ -26,7 +26,6 @@ enum {
 new bool:g_bCloak = true;
 new bool:g_bDisguise = true;
 new bool:g_bEnabled = false;
-new bool:g_bLateLoad = false;
 
 new Handle:g_hCvarCloak;
 new Handle:g_hCvarDisguise;
@@ -42,18 +41,13 @@ public Plugin:myinfo = {
     url = "http://forums.alliedmods.net"
 };
 
-public APLRes:AskPluginLoad2(Handle:hMyself, bool:bLateLoad, String:szError[], iErrLen) {
-    g_bLateLoad = bLateLoad;
-    return APLRes_Success;
-}
-
 public OnPluginStart() {
     LoadTranslations("meleeonly.phrases");
     LoadTranslations("basevotes.phrases");
 
     RegAdminCmd("sm_meleeonly", Command_MeleeOnly, ADMFLAG_SLAY, "sm_meleeonly - Toggles melee only");
     RegAdminCmd("sm_meleeonly_vote", Command_Vote, ADMFLAG_VOTE, "sm_meleeonly_vote - Starts a vote for melee only");
-    
+
     RegServerCmd("sm_meleeonly_whitelist", Command_Whitelist, "sm_meleeonly_whitelist <name> - Whitelists the given weapon name");
     RegServerCmd("sm_meleeonly_remove", Command_Remove, "sm_meleeonly_remove <name|all> - Removes the given weapon name from the whitelist");
 
@@ -72,12 +66,10 @@ public OnPluginStart() {
         OnAdminMenuReady(hTopMenu);
     }
 
-    if (g_bLateLoad) {
-        for (new iClient = 1; iClient <= MaxClients; iClient++) {
-            if (IsClientInGame(iClient)) {
-                SDKHook(iClient, SDKHook_WeaponSwitch, Hook_WeaponSwitch);
-                SDKHook(iClient, SDKHook_PostThink, Hook_PostThink);
-            }
+    for (new iClient = 1; iClient <= MaxClients; iClient++) {
+        if (IsClientInGame(iClient)) {
+            SDKHook(iClient, SDKHook_WeaponSwitch, Hook_WeaponSwitch);
+            SDKHook(iClient, SDKHook_PostThink, Hook_PostThink);
         }
     }
 }
@@ -92,7 +84,7 @@ public OnClientPutInServer(iClient) {
 public Action:Hook_WeaponSwitch(iClient, iWeapon) {
     if (g_bEnabled) {
         new iEnt = GetPlayerWeaponSlot(iClient, WEAPONSLOT_MELEE);
-        if (iWeapon != iEnt && !CheckWeaponWhiteList(iWeapon)) {
+        if (iEnt && iWeapon != iEnt && !CheckWeaponWhiteList(iWeapon)) {
             return Plugin_Handled;
         }
     }
@@ -103,20 +95,19 @@ public Action:Hook_WeaponSwitch(iClient, iWeapon) {
 public Hook_PostThink(iClient) {
     if (g_bEnabled && IsPlayerAlive(iClient) && TF2_GetPlayerClass(iClient) == TFClass_Spy) {
         if (g_bCloak == false) {
-            if (TF2_GetPlayerConditionFlags(iClient) & TF_CONDFLAG_CLOAKED) {
+            if (TF2_IsPlayerInCondition(iClient, TFCond_Cloaked)) {
                 TF2_RemoveCondition(iClient, TFCond_Cloaked);
             }
-            
+
             SetEntPropFloat(iClient, Prop_Send, "m_flCloakMeter", 1.0);
         }
 
         if (g_bDisguise == false) {
-            new iCondFlags = TF2_GetPlayerConditionFlags(iClient);
-            if (iCondFlags & TF_CONDFLAG_DISGUISING) {
+            if (TF2_IsPlayerInCondition(iClient, TFCond_Disguising)) {
                 TF2_RemoveCondition(iClient, TFCond_Disguising);
             }
 
-            if (iCondFlags & TF_CONDFLAG_DISGUISED) {
+            if (TF2_IsPlayerInCondition(iClient, TFCond_Disguised)) {
                 TF2_RemoveCondition(iClient, TFCond_Disguised);
             }
         }
@@ -188,7 +179,7 @@ DisplayMeleeMenu(iClient) {
                 AddMenuItem(hMenu, "0", "Enable Melee Only");
             }
         }
-        
+
         AddMenuItem(hMenu, "1", "Toggle Melee Only Vote");
 
         SetMenuExitBackButton(hMenu, true);
@@ -211,7 +202,7 @@ public MeleeMenuHandler(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
 }
 
 public Action:Command_MeleeOnly(iClient, iArgs) {
-    ShowActivity2(iClient, "[SM] ", "%N %s melee only", iClient, g_bEnabled?"disabled":"enabled");
+    ShowActivity2(iClient, "[SM] ", "%N %s melee only", iClient, g_bEnabled ? "disabled" : "enabled");
     ToggleMeleeOnly();
     return Plugin_Handled;
 }
@@ -223,7 +214,7 @@ public Action:Command_Vote(iClient, iArgs) {
     }
 
     g_hVoteMenu = CreateMenu(Vote_Callback, MenuAction:MENU_ACTIONS_ALL);
-    SetMenuTitle(g_hVoteMenu, "%s Melee Only?", g_bEnabled?"Disable":"Enable");
+    SetMenuTitle(g_hVoteMenu, "%s Melee Only?", g_bEnabled ? "Disable" : "Enable");
     AddMenuItem(g_hVoteMenu, VOTE_YES, "Yes");
     AddMenuItem(g_hVoteMenu, VOTE_NO, "No");
     SetMenuExitButton(g_hVoteMenu, true);
@@ -285,10 +276,10 @@ public Action:Command_Remove(iArgs) {
         PrintToServer("[SM] Usage: sm_meleeonly_remove <name|all> - Removes the given weapon name from the whitelist");
         return Plugin_Handled;
     }
-    
+
     decl String:szArg[32];
     GetCmdArg(1, szArg, sizeof(szArg));
-    
+
     if (strcmp(szArg, "all", false) == 0) {
         ClearArray(g_hWhiteListArray);
     } else {
@@ -300,12 +291,12 @@ public Action:Command_Remove(iArgs) {
             PrintToServer("[SM] Weapon \"%s\" is not whitelisted", szArg);
         }
     }
-    
+
     return Plugin_Handled;
 }
 
 public OnConVarChanged(Handle:hConVar, const String:szOldValue[], const String:szNewValue[]) {
-    new bool:bNewValue = (StringToInt(szNewValue) == 0 ? false : true);
+    new bool:bNewValue = StringToInt(szNewValue) == 0 ? false : true;
     if (hConVar == g_hCvarCloak) {
         g_bCloak = bNewValue;
     } else /*if (hConVar == g_hCvarDisguise)*/ {
@@ -320,10 +311,24 @@ EnableMeleeOnly() {
             ChangePlayerWeaponSlot(iClient, WEAPONSLOT_MELEE);
         }
     }
+
+    new iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "obj_sentrygun")) != -1) {
+        if (IsSentryEnabled(iEnt)) {
+            SetSentryEnabled(iEnt, true);
+        }
+    }
 }
 
 DisableMeleeOnly() {
     g_bEnabled = false;
+
+    new iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "obj_sentrygun")) != -1) {
+        if (!IsSentryEnabled(iEnt)) {
+            SetSentryEnabled(iEnt, false);
+        }
+    }
 }
 
 ToggleMeleeOnly() {
@@ -343,7 +348,7 @@ bool:CheckWeaponWhiteList(iEnt) {
     return false;
 }
 
-stock bool:ChangePlayerWeaponSlot(iClient, iSlot) {
+bool:ChangePlayerWeaponSlot(iClient, iSlot) {
     if (IsClientInGame(iClient) && IsPlayerAlive(iClient)) {
         new iWeapon = GetPlayerWeaponSlot(iClient, iSlot);
         if (iWeapon > MaxClients) {
@@ -355,6 +360,14 @@ stock bool:ChangePlayerWeaponSlot(iClient, iSlot) {
     return false;
 }
 
-stock GetPlayerWeapon(iClient) {
+GetPlayerWeapon(iClient) {
     return GetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon");
+}
+
+bool:IsSentryEnabled(iEnt) {
+    return GetEntProp(iEnt, Prop_Send, "m_bDisabled") ? true : false;
+}
+
+SetSentryEnabled(iEnt, bool:iEnabled) {
+    SetEntProp(iEnt, Prop_Send, "m_bDisabled", iEnabled);
 }
