@@ -55,7 +55,9 @@ public Action:Command_Resize(iClient, iArgCount) {
     new Float:fRatio = ClampFloat(StringToFloat(szArg2), 0.1, 5.0);
     
     for (new i = 0; i < iTargetCount; i++) {
-        ResizePlayer(aTargetList[i], fRatio);
+        if (IsClientInGame(aTargetList[i])) {
+            ResizePlayer(aTargetList[i], fRatio);
+        }
     }
     
     return Plugin_Handled;
