@@ -16,9 +16,8 @@ new bool:g_bUberCharge[MAXPLAYERS+1];
 public OnPluginStart() {
     LoadTranslations("common.phrases.txt");
 
-    RegAdminCmd("sm_resize", Command_Resize, ADMFLAG_RCON, "sm_resize <#userid|name> <0.1 - 5.0>");
-    RegAdminCmd("sm_resize2", Command_Resize2, ADMFLAG_RCON, "sm_resize2 <#userid|name> <0.1 - 5.0>");
-    RegAdminCmd("sm_thirdperson", Command_ThirdPerson, ADMFLAG_RCON, "sm_thirdperson <#userid|name> <0/1>");
+    RegAdminCmd("sm_resize", Command_Resize, ADMFLAG_RCON, "sm_resize <#userid|name> [0.1 - 5.0]");
+    RegAdminCmd("sm_thirdperson", Command_ThirdPerson, ADMFLAG_RCON, "sm_thirdperson <#userid|name> <0/1/2>");
     RegAdminCmd("sm_ubercharge", Command_UberCharge, ADMFLAG_RCON, "sm_ubercharge <#userid|name> <0/1>");
 }
 
@@ -27,20 +26,19 @@ public OnClientPutInServer(iClient) {
 }
 
 public Action:Command_Resize(iClient, iArgCount) {
-    if (iArgCount < 2) {
-        ReplyToCommand(iClient, "[SM] Usage: sm_resize <#userid|name> <0.1 - 5.0>");
+    if (iArgCount < 1) {
+        ReplyToCommand(iClient, "[SM] Usage: sm_resize <#userid|name> [0.1 - 5.0]");
         return Plugin_Handled;
     }
 
-    decl String:szArg1[32], String:szArg2[4];
-    GetCmdArg(1, szArg1, sizeof(szArg1));
-    GetCmdArg(2, szArg2, sizeof(szArg2));
+    decl String:szTarget[32];
+    GetCmdArg(1, szTarget, sizeof(szTarget));
 
     decl String:szTargetName[MAX_TARGET_LENGTH];
     decl aTargetList[MAXPLAYERS], iTargetCount, bool:bTransIsMulti;
 
     if ((iTargetCount = ProcessTargetString(
-        szArg1,
+        szTarget,
         iClient,
         aTargetList,
         MAXPLAYERS,
@@ -53,50 +51,20 @@ public Action:Command_Resize(iClient, iArgCount) {
         return Plugin_Handled;
     }
 
-    new Float:fRatio = ClampFloat(StringToFloat(szArg2), 0.1, 5.0);
+    if (iArgCount >= 2) {
+        decl String:szRatio[4];
+        new Float:fRatio = ClampFloat(StringToFloat(szRatio), 0.1, 5.0);
 
-    for (new i = 0; i < iTargetCount; i++) {
-        if (IsClientInGame(aTargetList[i])) {
-            ResizePlayer(aTargetList[i], fRatio);
+        for (new i = 0; i < iTargetCount; i++) {
+            if (IsClientInGame(aTargetList[i])) {
+                ResizePlayer(aTargetList[i], fRatio);
+            }
         }
-    }
-
-    return Plugin_Handled;
-}
-
-
-public Action:Command_Resize2(iClient, iArgCount) {
-    if (iArgCount < 2) {
-        ReplyToCommand(iClient, "[SM] Usage: sm_resize2 <#userid|name> <0.1 - 5.0>");
-        return Plugin_Handled;
-    }
-
-    decl String:szArg1[32], String:szArg2[4];
-    GetCmdArg(1, szArg1, sizeof(szArg1));
-    GetCmdArg(2, szArg2, sizeof(szArg2));
-
-    decl String:szTargetName[MAX_TARGET_LENGTH];
-    decl aTargetList[MAXPLAYERS], iTargetCount, bool:bTransIsMulti;
-
-    if ((iTargetCount = ProcessTargetString(
-        szArg1,
-        iClient,
-        aTargetList,
-        MAXPLAYERS,
-        COMMAND_FILTER_CONNECTED,
-        szTargetName,
-        sizeof(szTargetName),
-        bTransIsMulti)) <= 0
-    ) {
-        ReplyToTargetError(iClient, iTargetCount);
-        return Plugin_Handled;
-    }
-
-    new Float:fRatio = ClampFloat(StringToFloat(szArg2), 0.1, 5.0);
-
-    for (new i = 0; i < iTargetCount; i++) {
-        if (IsClientInGame(aTargetList[i])) {
-            ResizePlayer2(aTargetList[i], fRatio);
+    } else {
+        for (new i = 0; i < iTargetCount; i++) {
+            if (IsClientInGame(aTargetList[i])) {
+                ReplyToCommand(iClient, "[SM] %N: %0.2f", aTargetList[i], GetPlayerSizeRatio(aTargetList[i]));
+            }
         }
     }
 
@@ -105,7 +73,7 @@ public Action:Command_Resize2(iClient, iArgCount) {
 
 public Action:Command_ThirdPerson(iClient, iArgCount) {
     if (iArgCount < 2) {
-        ReplyToCommand(iClient, "[SM] Usage: sm_thirdperson <#userid|name> <seconds>");
+        ReplyToCommand(iClient, "[SM] Usage: sm_thirdperson <#userid|name> <0/1/2> - 0 = Firstperson, 1 = Thirdperson, 2 = Thirdperson + keep through death");
         return Plugin_Handled;
     }
 
@@ -181,15 +149,15 @@ public Action:Command_UberCharge(iClient, iArgCount) {
 
 ResizePlayer(iClient, Float:fRatio) {
     SetEntPropFloat(iClient, Prop_Send, "m_flModelScale", fRatio);
-    SetEntPropFloat(iClient, Prop_Send, "m_flStepSize", 18.0 * fRatio);
+    SetEntPropFloat(iClient, Prop_Send, "m_flStepSize", 18.0*fRatio);
 }
 
-ResizePlayer2(iClient, Float:fRatio) {
-    SetEntPropFloat(iClient, Prop_Send, "m_flModelWidthScale", fRatio);
+Float:GetPlayerSizeRatio(iClient) {
+    return GetEntPropFloat(iClient, Prop_Send, "m_flModelScale");
 }
 
-SetThirdPerson(iClient, bMode) {
-    SetVariantInt(bMode);
+SetThirdPerson(iClient, iMode) {
+    SetVariantInt(iMode);
     AcceptEntityInput(iClient, "SetForcedTauntCam");
 }
 
