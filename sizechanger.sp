@@ -17,7 +17,7 @@ public Plugin:myinfo = {
     name = "Size Changer",
     author = "bl4nk",
     description = "Change the size of players upon kill/death",
-    version = "1.0.0",
+    version = "1.0.1",
     url = "http://forums.joe.to/"
 };
 
@@ -32,13 +32,15 @@ public OnPluginStart() {
 public Event_PlayerDeath(Handle:hEvent, const String:szEventName[], bool:bDontBroadcast) {
     new iVictim = GetClientOfUserId(GetEventInt(hEvent, "userid"));
     new iAttacker = GetClientOfUserId(GetEventInt(hEvent, "attacker"));
-    
-    if (iAttacker && (iAttacker != iVictim)) {
+
+    if (iVictim != iAttacker) {
         if (iVictim && !IsFakeClient(iVictim)) {
             ResizePlayer(iVictim, ClampFloat(GetPlayerSizeRatio(iAttacker) - GetConVarFloat(g_hConVarIncrement), GetConVarFloat(g_hConVarMinSize), GetConVarFloat(g_hConVarMaxSize)));
         }
-        
-        ResizePlayer(iAttacker, ClampFloat(GetPlayerSizeRatio(iAttacker) + GetConVarFloat(g_hConVarIncrement), GetConVarFloat(g_hConVarMinSize), GetConVarFloat(g_hConVarMaxSize)));
+
+        if (iAttacker && !IsFakeClient(iAttacker)) {
+            ResizePlayer(iAttacker, ClampFloat(GetPlayerSizeRatio(iAttacker) + GetConVarFloat(g_hConVarIncrement), GetConVarFloat(g_hConVarMinSize), GetConVarFloat(g_hConVarMaxSize)));
+        }
     }
 }
 
