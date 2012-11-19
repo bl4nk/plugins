@@ -1,19 +1,16 @@
 /**
  * Working:
- *   - Menu & voting system
+ *   - Menu and voting system
  *   - Bots can be added based on class and difficulty
  *   - All bots can be kicked from the server
+ *   - Melee Only, Bonk!, and Fisto modes
  * To-do:
- *   - Admins don't need to vote
- *   - Ensure bots don't change class
- *     - tf_bot_keep_class_after_death 1
- *   - Implement bot modes
- *     - Melee: tf_bot_melee_only 1
- *     - Fisto/Bonk: tf_bot_force_class heavyweapons/scout
- *       - "tf_bot_keep_class_after_death" causes problems, will probably
- *         have to kick all bots and add new ones instead (but how many?)
+ *   - Multiple bot modes shouldn't be allowed to be active at the same time
+ *   - For bot melee modes, move all bots to one team and players to the other
  *   - Make it so bots can be individually removed
  *   - Hide messages of bots joining/leaving/bot counts changing/etc
+ *   - Change bots classes back after Bonk! or Fisto modes are disabled
+ *   - When all bots are removed, all modes should disable automatically
  */
 
 #pragma semicolon 1
@@ -63,37 +60,47 @@ new g_iBotQuota;
 new g_iVoteStarter = -1;
 new g_iVoteType = VoteType_None;
 
+new bool:g_bCVarMeleeOnly;
 new bool:g_bIsAdmin[MAXPLAYERS+1];
 new bool:g_bNavExists;
+new bool:g_bBonkMode;
+new bool:g_bFistoMode;
+new bool:g_bMeleeMode;
 
 new Handle:g_hCurrentMenu[MAXPLAYERS+1];
 new Handle:g_hCVarBotQuota;
 new Handle:g_hCVarBotQuotaMode;
+new Handle:g_hCVarKeepClass;
+new Handle:g_hCVarMeleeOnly;
 
 public Plugin:myinfo = {
     name = "BotPlugin",
     author = "bl4nk",
-    description = "Handles adding/removing bots as well as special bot modes through voting",
+    description = "Handles adding/removing bots (as well as special bot modes) through voting",
     version = "1.0.0",
     url = "http://forums.alliedmods.net/"
 };
 
 public OnPluginStart() {
     LoadTranslations("basevotes.phrases");
-    
+
     g_hCVarBotQuota = FindConVar("tf_bot_quota");
     g_hCVarBotQuotaMode = FindConVar("tf_bot_quota_mode");
+    g_hCVarKeepClass = FindConVar("tf_bot_keep_class_after_death");
+    g_hCVarMeleeOnly = FindConVar("tf_bot_melee_only");
 
     HookConVarChange(g_hCVarBotQuota, CVarChange_BotQuota);
     HookConVarChange(g_hCVarBotQuotaMode, CVarChange_BotQuotaMode);
+    HookConVarChange(g_hCVarKeepClass, CVarChange_KeepClass);
+    HookConVarChange(g_hCVarMeleeOnly, CVarChange_MeleeOnly);
 
     RegConsoleCmd("sm_bots", Command_Bots, "Control the bots on the server");
-    
-    /*for (new i = 1; i <= MaxClients; i++) {
+
+    for (new i = 1; i <= MaxClients; i++) {
         if (IsClientAuthorized(i)) {
             g_bIsAdmin[i] = CheckCommandAccess(i, "sm_bots", ADMFLAG_GENERIC);
         }
-    }*/
+    }
 }
 
 public OnMapStart() {
@@ -109,9 +116,9 @@ public OnMapStart() {
     }
 }
 
-/*public OnClientPostAdminCheck(iClient) {
+public OnClientPostAdminCheck(iClient) {
     g_bIsAdmin[iClient] = CheckCommandAccess(iClient, "sm_bots", ADMFLAG_GENERIC);
-}*/
+}
 
 public Action:Command_Bots(iClient, iArgCount) {
     if (!g_bNavExists) {
@@ -121,7 +128,7 @@ public Action:Command_Bots(iClient, iArgCount) {
     } else {
         DisplayMainMenu(iClient);
     }
-    
+
     return Plugin_Handled;
 }
 
@@ -144,6 +151,20 @@ public CVarChange_BotQuotaMode(Handle:hCVar, const String:szOldValue[], const St
     }
 }
 
+public CVarChange_KeepClass(Handle:hCVar, const String:szOldValue[], const String:szNewValue[]) {
+    if (g_iBotQuota && (g_bBonkMode || g_bFistoMode) && !StringToInt(szNewValue)) {
+        SetConVarBool(g_hCVarKeepClass, true);
+    }
+}
+
+public CVarChange_MeleeOnly(Handle:hCVar, const String:szOldValue[], const String:szNewValue[]) {
+    g_bCVarMeleeOnly = (StringToInt(szNewValue) ? true : false);
+
+    if ((g_bBonkMode || g_bFistoMode || g_bMeleeMode) && !g_bCVarMeleeOnly) {
+        SetConVarBool(g_hCVarMeleeOnly, true);
+    }
+}
+
 DisplayMainMenu(iClient) {
     new Handle:hMenu = CreateMenu(MainMenuHandler, MenuAction_Select|MenuAction_End);
 
@@ -155,10 +176,19 @@ DisplayMainMenu(iClient) {
 
     SetMenuExitButton(hMenu, true);
 
-    AddMenuItem(hMenu, "add", "Add Bot to each team");
-    AddMenuItem(hMenu, "melee", "Toggle Bot Melee Mode", ITEMDRAW_DISABLED);
-    AddMenuItem(hMenu, "bonk", "Toggle Bonk! Mode", ITEMDRAW_DISABLED);
-    AddMenuItem(hMenu, "fisto", "Toggle Fisto! Mode", ITEMDRAW_DISABLED);
+    AddMenuItem(hMenu, "add", "Add Bot");
+
+    decl String:szBuffer[24];
+
+    Format(szBuffer, sizeof(szBuffer), "%s Bot Melee Mode", (g_bMeleeMode ? "Disable" : "Enable"));
+    AddMenuItem(hMenu, "melee", szBuffer);
+
+    Format(szBuffer, sizeof(szBuffer), "%s Bonk! Mode", (g_bBonkMode ? "Disable" : "Enable"));
+    AddMenuItem(hMenu, "bonk", szBuffer);
+
+    Format(szBuffer, sizeof(szBuffer), "%s Fisto Mode", (g_bFistoMode ? "Disable" : "Enable"));
+    AddMenuItem(hMenu, "fisto", szBuffer);
+
     AddMenuItem(hMenu, "remove", "Remove all bots");
 
     DisplayMenu(hMenu, iClient, MENU_TIME_FOREVER);
@@ -173,28 +203,55 @@ public MainMenuHandler(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
             DisplayAddBotMenu(iParam1);
         } else if (strcmp(szInfo, "melee") == 0) {
             if (g_bIsAdmin[iParam1]) {
-                // enable melee mode
+                g_bMeleeMode = !g_bMeleeMode;
+                SetConVarBool(g_hCVarMeleeOnly, g_bMeleeMode);
             } else {
                 g_iVoteType = VoteType_MeleeMode;
                 StartVote(iParam1);
             }
         } else if (strcmp(szInfo, "bonk") == 0) {
             if (g_bIsAdmin[iParam1]) {
-                // enable bonk! mode
+                g_bBonkMode = !g_bBonkMode;
+
+                if (g_bBonkMode) {
+                    SetConVarBool(g_hCVarKeepClass, true);
+                    SetConVarBool(g_hCVarMeleeOnly, true);
+
+                    RespawnBotsAsClass(TFClass_Scout);
+                } else {
+                    SetConVarBool(g_hCVarKeepClass, false);
+
+                    if (!g_bMeleeMode) {
+                        SetConVarBool(g_hCVarMeleeOnly, false);
+                    }
+                }
             } else {
                 g_iVoteType = VoteType_BonkMode;
                 StartVote(iParam1);
             }
         } else if (strcmp(szInfo, "fisto") == 0) {
             if (g_bIsAdmin[iParam1]) {
-                // enable fisto! mode
+                g_bFistoMode = !g_bFistoMode;
+
+                if (g_bBonkMode) {
+                    SetConVarBool(g_hCVarKeepClass, true);
+                    SetConVarBool(g_hCVarMeleeOnly, true);
+
+                    RespawnBotsAsClass(TFClass_Heavy);
+                } else {
+                    SetConVarBool(g_hCVarKeepClass, false);
+
+                    if (!g_bMeleeMode) {
+                        SetConVarBool(g_hCVarMeleeOnly, false);
+                    }
+                }
             } else {
                 g_iVoteType = VoteType_FistoMode;
                 StartVote(iParam1);
             }
         } else if (strcmp(szInfo, "remove") == 0) {
             if (g_bIsAdmin[iParam1]) {
-                // remove all bots
+                ServerCommand("tf_bot_kick all");
             } else {
                 g_iVoteType = VoteType_RemoveAllBots;
                 StartVote(iParam1);
@@ -234,7 +291,7 @@ public AddBotMenuHandler(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
         if (iParam1 == MenuEnd_ExitBack) {
             DisplayMainMenu(FindMenuOwner(hMenu));
         }
-        
+
         ResetMenuHandle(FindMenuOwner(hMenu), hMenu);
     }
 }
@@ -256,58 +313,74 @@ DisplayDifficultyMenu(iClient) {
 public DifficultyMenuHandler(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
     if (iAction == MenuAction_Select) { // iParam1=client, iParam2=difficulty
         if (g_bIsAdmin[iParam1]) {
-            // add the bots
-            return;
-        }
+            decl String:szClass[32], String:szDifficulty[16];
+            GetClassName(g_iAddBotClass[g_iVoteStarter], szClass, sizeof(szClass));
+            GetDifficulty(g_iBotDifficulty, szDifficulty, sizeof(szDifficulty));
 
-        g_iBotDifficulty = iParam2;
-        g_iVoteStarter = iParam1;
-        g_iVoteType = VoteType_AddBot;
-        
-        StartVote(iParam1);
+            if (GetTeamClientCount(_:TFTeam_Blue) > GetTeamClientCount(_:TFTeam_Red)) {
+                ServerCommand("tf_bot_add 1 %s red %s", szClass, szDifficulty);
+            } else {
+                ServerCommand("tf_bot_add 1 %s blue %s", szClass, szDifficulty);
+            }
+        } else {
+            g_iBotDifficulty = iParam2;
+            g_iVoteStarter = iParam1;
+            g_iVoteType = VoteType_AddBot;
+
+            StartVote(iParam1);
+        }
     } else if (iAction == MenuAction_End) { // iParam1=end reason
         if (iParam1 == MenuEnd_ExitBack) {
             DisplayAddBotMenu(FindMenuOwner(hMenu));
         }
-        
+
         ResetMenuHandle(FindMenuOwner(hMenu), hMenu);
     }
 }
 
 StartVote(iClient) {
-    decl String:szAuth[32];
+    decl String:szAuth[32], String:szTitle[32];
     GetClientAuthString(iClient, szAuth, sizeof(szAuth));
 
-    decl String:szMessage[128], String:szTitle[32];
-    Format(szMessage, sizeof(szMessage), "%N (%s) started a %s vote", iClient, szAuth, g_szVoteTypes[g_iVoteType]);
-    
-    if (g_iVoteType == VoteType_AddBot) {
-        decl String:szDifficulty[12], String:szClass[32], String:szBuffer[64];
-        GetDifficulty(g_iBotDifficulty, szDifficulty, sizeof(szDifficulty));
-        GetClassName(g_iAddBotClass[iClient], szClass, sizeof(szClass));
+    switch (g_iVoteType) {
+        case VoteType_AddBot: {
+            decl String:szDifficulty[12], String:szClass[32];
+            GetDifficulty(g_iBotDifficulty, szDifficulty, sizeof(szDifficulty));
+            GetClassName(g_iAddBotClass[iClient], szClass, sizeof(szClass));
 
-        Format(szBuffer, sizeof(szBuffer), " (difficulty: %s, class: %s)", szDifficulty, szClass);
-        StrCat(szMessage, sizeof(szMessage), szBuffer);
-        
-        Format(szTitle, sizeof(szTitle), "Add %s %s Bot", szDifficulty, szClass);
-    } else {
-        strcopy(szTitle, sizeof(szTitle), g_szVoteTypes[g_iVoteType]);
+            Format(szTitle, sizeof(szTitle), "Add %s %s Bot", szDifficulty, szClass);
+        }
+        case VoteType_MeleeMode: {
+            Format(szTitle, sizeof(szTitle), "%s Bot Melee Mode", (g_bMeleeMode ? "Disable" : "Enable"));
+        }
+        case VoteType_BonkMode: {
+            Format(szTitle, sizeof(szTitle), "%s Bonk! Mode", (g_bBonkMode ? "Disable" : "Enable"));
+        }
+        case VoteType_FistoMode: {
+            Format(szTitle, sizeof(szTitle), "%s Fisto Mode", (g_bFistoMode ? "Disable" : "Enable"));
+        }
+        default: {
+            strcopy(szTitle, sizeof(szTitle), g_szVoteTypes[g_iVoteType]);
+        }
     }
-    
+
+    decl String:szMessage[128];
+    Format(szMessage, sizeof(szMessage), "%N (%s) started a %s vote", iClient, szAuth, szTitle);
+
     LogMessage("[SM] %s", szMessage);
-    
+
     new Handle:hMenu = CreateMenu(Vote_MenuCallback, MenuAction_Select|MenuAction_VoteEnd|MenuAction_VoteCancel);
     SetVoteResultCallback(hMenu, Vote_ResultsCallback);
-    
+
     SetMenuTitle(hMenu, szTitle);
     SetMenuExitButton(hMenu, true);
-    
+
     AddMenuItem(hMenu, "", "");
     AddMenuItem(hMenu, "", "");
     AddMenuItem(hMenu, "", "");
     AddMenuItem(hMenu, "yes", "Yes");
     AddMenuItem(hMenu, "no", "No");
-    
+
     VoteMenuToAll(hMenu, 20);
 }
 
@@ -315,7 +388,7 @@ public Vote_MenuCallback(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
     if (iAction == MenuAction_Select) { // iParam1=client, iParam2=choice
         decl String:szItem[32];
         GetMenuItem(hMenu, iParam2, szItem, sizeof(szItem));
-        
+
         if (!strlen(szItem)) {
             RedrawClientVoteMenu(iParam1);
         }
@@ -328,7 +401,7 @@ public Vote_MenuCallback(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
                 PrintToChatAll("[SM] Vote failed, no votes received");
             }
         }
-        
+
         g_iVoteStarter = -1;
         g_iVoteType = VoteType_None;
     }
@@ -337,27 +410,54 @@ public Vote_MenuCallback(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
 public Vote_ResultsCallback(Handle:hMenu, iNumVotes, iNumClients, const iCientInfo[][2], iNumItems, const iItemInfo[][2]) {
     decl String:szItem[8];
     GetMenuItem(hMenu, iItemInfo[0][VOTEINFO_ITEM_INDEX], szItem, sizeof(szItem));
-    
+
     if (strcmp(szItem, "yes") == 0) {
         PrintToChatAll("[SM] Vote successful");
         switch (g_iVoteType) {
             case VoteType_AddBot: {
-                new iBluCount = GetTeamClientCount(_:TFTeam_Blue),
-                    iRedCount = GetTeamClientCount(_:TFTeam_Red);
-                
                 decl String:szClass[32], String:szDifficulty[16];
                 GetClassName(g_iAddBotClass[g_iVoteStarter], szClass, sizeof(szClass));
                 GetDifficulty(g_iBotDifficulty, szDifficulty, sizeof(szDifficulty));
-                
-                if (iBluCount > iRedCount) {
-                    ServerCommand("tf_bot_add 1 %s red %s", szClass, szDifficulty);
-                    ServerCommand("tf_bot_add 1 %s blue %s", szClass, szDifficulty);
-                } else {
-                    ServerCommand("tf_bot_add blue %s", szClass, szDifficulty);
-                    ServerCommand("tf_bot_add red %s", szClass, szDifficulty);
-                }
-                
+
+                ServerCommand("tf_bot_add 1 %s %s %s", szClass, ((GetTeamClientCount(_:TFTeam_Blue) > GetTeamClientCount(_:TFTeam_Red)) ? "blue" : "red"), szDifficulty);
+
                 g_iVoteStarter = -1;
+            }
+            case VoteType_MeleeMode: {
+                g_bMeleeMode = !g_bMeleeMode;
+                SetConVarBool(g_hCVarMeleeOnly, g_bMeleeMode);
+            }
+            case VoteType_BonkMode: {
+                g_bBonkMode = !g_bBonkMode;
+
+                if (g_bBonkMode) {
+                    SetConVarBool(g_hCVarKeepClass, true);
+                    SetConVarBool(g_hCVarMeleeOnly, true);
+
+                    RespawnBotsAsClass(TFClass_Scout);
+                } else {
+                    SetConVarBool(g_hCVarKeepClass, false);
+
+                    if (!g_bMeleeMode) {
+                        SetConVarBool(g_hCVarMeleeOnly, false);
+                    }
+                }
+            }
+            case VoteType_FistoMode: {
+                g_bFistoMode = !g_bFistoMode;
+
+                if (g_bFistoMode) {
+                    SetConVarBool(g_hCVarKeepClass, true);
+                    SetConVarBool(g_hCVarMeleeOnly, true);
+
+                    RespawnBotsAsClass(TFClass_Heavy);
+                } else {
+                    SetConVarBool(g_hCVarKeepClass, false);
+
+                    if (!g_bMeleeMode) {
+                        SetConVarBool(g_hCVarMeleeOnly, false);
+                    }
+                }
             }
             case VoteType_RemoveAllBots: {
                 ServerCommand("tf_bot_kick all");
@@ -366,7 +466,7 @@ public Vote_ResultsCallback(Handle:hMenu, iNumVotes, iNumClients, const iCientIn
     } else {
         PrintToChatAll("[SM] Vote failed");
     }
-    
+
     g_iVoteType = VoteType_None;
 }
 
@@ -390,7 +490,7 @@ stock GetClientCount2(bool:bInGameOnly=true, bool:bCountBots=true, bool:bCountRe
                         if (bIsReplay || bIsSourceTV) {
                             continue;
                         }
-                        
+
                         iCount++;
                     }
                 } else {
@@ -399,7 +499,7 @@ stock GetClientCount2(bool:bInGameOnly=true, bool:bCountBots=true, bool:bCountRe
             }
         }
     }
-    
+
     return iCount;
 }
 
@@ -465,5 +565,17 @@ FindMenuOwner(Handle:hMenu) {
 ResetMenuHandle(iClient, Handle:hMenu) {
     if (hMenu == g_hCurrentMenu[iClient]) {
         g_hCurrentMenu[iClient] = INVALID_HANDLE;
+    }
+}
+
+RespawnBotsAsClass(TFClassType:iClass) {
+    for (new i = 1; i <= MaxClients; i++) {
+        if (IsClientInGame(i) && IsFakeClient(i)) {
+            TF2_SetPlayerClass(i, iClass);
+
+            if (IsPlayerAlive(i)) {
+                TF2_RespawnPlayer(i);
+            }
+        }
     }
 }
