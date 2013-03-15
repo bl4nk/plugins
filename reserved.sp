@@ -50,7 +50,25 @@ public bool:OnClientPreConnectEx(const String:name[], String:pass[255], const St
 
             if (target)
             {
+                decl String:szAuth[32];
+                if (GetClientAuthString(target, szAuth, sizeof(szAuth))) {
+                    if (IsClientObserver(target)) {
+                        LogMessage("Kicking spectating client \"%N\" (%s) to make room for Admin \"%s\" (%s)", target, szAuth, name, authid);
+                    } else {
+                        LogMessage("Kicking client \"%N\" (%s) to make room for Admin \"%s\" (%s)", target, szAuth, name, authid);
+                    }
+                } else {
+                    if (IsClientObserver(target)) {
+                        LogMessage("Kicking spectating client \"%N\" (UNKNOWN_STEAMID) to make room for Admin \"%s\" (%s)", target, name, authid);
+                    } else {
+                        LogMessage("Kicking client \"%N\" (UNKNOWN_STEAMID) to make room for Admin \"%s\" (%s)", target, name, authid);
+                    }
+                }
+
                 KickClientEx(target, "Slot reserved\nVisit http://forums.joe.to/ to request a\nfree reserved slot!");
+            } else {
+                Format(rejectReason, 255, "No reserved slots available\nSorry, but keep trying!");
+                return false;
             }
         }
     }
@@ -65,6 +83,12 @@ SelectKickClient()
 
     new Float:highestSpecValue;
     new highestSpecValueId;
+
+    if (g_KickType == Kick_ShortestTime)
+    {
+        highestValue = float(0x7FFFFFFF);
+        highestSpecValue = float(0x7FFFFFFF);
+    }
 
     new bool:specFound;
 
@@ -109,27 +133,29 @@ SelectKickClient()
                         highestSpecValue = value;
                         highestSpecValueId = i;
                     }
-                } 
+                }
                 else if (value > highestSpecValue)
                 {
                     highestSpecValue = value;
                     highestSpecValueId = i;
                 }
             }
-        }
-
-        if (g_KickType == Kick_ShortestTime)
-        {
-            if (value <= highestValue)
+            else
             {
-                highestValue = value;
-                highestValueId = i;
+                if (g_KickType == Kick_ShortestTime)
+                {
+                    if (value <= highestValue)
+                    {
+                        highestValue = value;
+                        highestValueId = i;
+                    }
+                }
+                else if (value >= highestValue)
+                {
+                    highestValue = value;
+                    highestValueId = i;
+                }
             }
-        }
-        else if (value >= highestValue)
-        {
-            highestValue = value;
-            highestValueId = i;
         }
     }
 
