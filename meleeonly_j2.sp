@@ -10,7 +10,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "2.1.0"
+#define PLUGIN_VERSION "2.2.0"
 
 #define VOTE_NO "##no##"
 #define VOTE_YES "##yes##"
@@ -48,8 +48,8 @@ public OnPluginStart() {
     RegAdminCmd("sm_meleeonly", Command_MeleeOnly, ADMFLAG_SLAY, "sm_meleeonly - Toggles melee only");
     RegAdminCmd("sm_meleeonly_vote", Command_Vote, ADMFLAG_VOTE, "sm_meleeonly_vote - Starts a vote for melee only");
 
-    RegServerCmd("sm_meleeonly_whitelist", Command_Whitelist, "sm_meleeonly_whitelist <name> - Whitelists the given weapon name");
-    RegServerCmd("sm_meleeonly_remove", Command_Remove, "sm_meleeonly_remove <name|all> - Removes the given weapon name from the whitelist");
+    RegServerCmd("sm_meleeonly_whitelist", Command_Whitelist, "sm_meleeonly_whitelist <index> - Whitelists the given item index");
+    RegServerCmd("sm_meleeonly_remove", Command_Remove, "sm_meleeonly_remove <name|all> - Removes the given item index from the whitelist");
 
     CreateConVar("sm_meleeonly_version", PLUGIN_VERSION, "Melee Only Version", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     g_hCvarCloak = CreateConVar("sm_meleeonly_cloak", "0", "1 = Allow Spies to cloak, 0 = Don't allow Spies to cloak", FCVAR_PLUGIN, true, 0.0, true, 1.0);
@@ -255,41 +255,51 @@ public Vote_Callback(Handle:hMenu, MenuAction:iAction, iParam1, iParam2) {
 
 public Action:Command_Whitelist(iArgs) {
     if (iArgs < 1) {
-        PrintToServer("[SM] Usage: sm_meleeonly_whitelist <name> - Whitelists the given weapon name");
+        PrintToServer("[SM] Usage: sm_meleeonly_whitelist <index> - Whitelists the given item index");
         return Plugin_Handled;
     }
 
     decl String:szArg[32];
     GetCmdArg(1, szArg, sizeof(szArg));
-
-    if (FindStringInArray(g_hWhiteListArray, szArg) > -1) {
-        PrintToServer("[SM] Weapon \"%s\" is already whitelisted", szArg);
-    } else {
-        PushArrayString(g_hWhiteListArray, szArg);
-        PrintToServer("[SM] Weapon \"%s\" is now whitelisted", szArg);
+    
+    new iIndex = StringToInt(szArg);
+    if (iIndex > 0) {
+        if (FindValueInArray(g_hWhiteListArray, iIndex) > -1) {
+            PrintToServer("[SM] Item index %i is already whitelisted", szArg);
+        } else {
+            PushArrayCell(g_hWhiteListArray, iIndex);
+            PrintToServer("[SM] Item index %i is now whitelisted", szArg);
+        }
     }
+    
     return Plugin_Handled;
 }
 
 public Action:Command_Remove(iArgs) {
     if (iArgs < 1) {
-        PrintToServer("[SM] Usage: sm_meleeonly_remove <name|all> - Removes the given weapon name from the whitelist");
+        PrintToServer("[SM] Usage: sm_meleeonly_remove <index|all> - Removes the given item index from the whitelist");
         return Plugin_Handled;
     }
 
     decl String:szArg[32];
     GetCmdArg(1, szArg, sizeof(szArg));
-
-    if (strcmp(szArg, "all", false) == 0) {
-        ClearArray(g_hWhiteListArray);
-    } else {
-        new iIndex;
-        if ((iIndex = FindStringInArray(g_hWhiteListArray, szArg)) > -1) {
-            RemoveFromArray(g_hWhiteListArray, iIndex);
-            PrintToServer("[SM] Weapon \"%s\" is no longer whitelisted", szArg);
+    
+    new iIndex = StringToInt(szArg);
+    if (iIndex > 0) {
+        if (strcmp(szArg, "all", false) == 0) {
+            ClearArray(g_hWhiteListArray);
+            PrintToServer("[SM] Removed all item indexes from the whitelist");
         } else {
-            PrintToServer("[SM] Weapon \"%s\" is not whitelisted", szArg);
+            new iArrayIndex;
+            if ((iArrayIndex = FindValueInArray(g_hWhiteListArray, iIndex)) > -1) {
+                RemoveFromArray(g_hWhiteListArray, iArrayIndex);
+                PrintToServer("[SM] Item index %i is no longer whitelisted", iIndex);
+            } else {
+                PrintToServer("[SM] Item index %i is not whitelisted", iIndex);
+            }
         }
+    } else {
+        PrintToServer("[SM] Invalid item index specified");
     }
 
     return Plugin_Handled;
@@ -337,10 +347,7 @@ ToggleMeleeOnly() {
 
 bool:CheckWeaponWhiteList(iEnt) {
     if (iEnt > MaxClients && IsValidEntity(iEnt)) {
-        decl String:szEntClass[32];
-        GetEdictClassname(iEnt, szEntClass, sizeof(szEntClass));
-
-        if (FindStringInArray(g_hWhiteListArray, szEntClass) > -1) {
+        if (FindValueInArray(g_hWhiteListArray, GetEntProp(iEnt, Prop_Send, "m_iItemDefinitionIndex")) > -1) {
             return true;
         }
     }
